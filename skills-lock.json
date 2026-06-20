@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "skills": {
+    "heroui-react": {
+      "source": "heroui-inc/heroui",
+      "sourceType": "github",
+      "skillPath": "skills/heroui-react/SKILL.md",
+      "computedHash": "f4a764d21a39ccc5b2076a869cf083bbfdb983e81f9deda8d75fef42c939a993"
+    },
+    "nestjs-patterns": {
+      "source": "affaan-m/ECC",
+      "sourceType": "github",
+      "skillPath": "skills/nestjs-patterns/SKILL.md",
+      "computedHash": "4f136746f8c4554556114ab94c7a3fd3c8795897104c300448bc81cf35cc7cfc"
+    },
+    "nextjs-turbopack": {
+      "source": "affaan-m/ECC",
+      "sourceType": "github",
+      "skillPath": "skills/nextjs-turbopack/SKILL.md",
+      "computedHash": "6fcbad503f4c7f2c8353ccadef4dc60e980dccbf6725cc41cc9d32e9d87c8753"
+    },
+    "saas-multi-tenant": {
+      "source": "sickn33/antigravity-awesome-skills",
+      "sourceType": "github",
+      "skillPath": "skills/saas-multi-tenant/SKILL.md",
+      "computedHash": "c41494fe2fdbeaa7df3e98fb8b8f9cb01ced924e087fc45c82a18df03f646f35"
+    },
+    "tanstack-query-expert": {
+      "source": "sickn33/antigravity-awesome-skills",
+      "sourceType": "github",
+      "skillPath": "skills/tanstack-query-expert/SKILL.md",
+      "computedHash": "06a1a73e5c624fb6118c343ec736ebf708202742ce7895cdfd156bd69cdea96c"
+    },
+    "ui-ux-pro-max": {
+      "source": "nextlevelbuilder/ui-ux-pro-max-skill",
+      "sourceType": "github",
+      "skillPath": ".claude/skills/ui-ux-pro-max/SKILL.md",
+      "computedHash": "6337038fe1fe6bbe1b9f252ab678ee575859190bab6f0f246f4061824eb40875"
+    }
+  }
+}

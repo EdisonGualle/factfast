@@ -1,0 +1,36 @@
+# Dependencias
+node_modules/
+dist/
+.next/
+build/
+out/
+
+# Variables de entorno
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+pnpm-lock.yaml
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Turbo
+.turbo/
+
+# Prisma
+prisma/generated/
+
+# Storage local
+storage/

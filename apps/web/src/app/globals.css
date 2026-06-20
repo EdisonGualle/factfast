@@ -1,0 +1,179 @@
+/* ═══════════════════════════════════════════════════════
+   globals.css — FactFast Design System
+
+   Paleta enterprise de facturación (Xero, QuickBooks, FreshBooks):
+   TEMA CLARO — fondo blanco/gris suave, acento azul corporativo
+   Siguiendo UI/UX Pro Max skill:
+   - Contrast 4.5:1 mínimo (WCAG AA)
+   - Spacing 4/8dp rhythm
+   - Onest como fuente principal
+   ═══════════════════════════════════════════════════════ */
+
+/* 1. Tailwind PRIMERO */
+@import "tailwindcss";
+
+/* 2. HeroUI DESPUÉS — Usamos el CSS compilado para evitar duplicar Tailwind y romper capas */
+@import "@heroui/styles/css";
+
+
+/* ─────────────────────────────────────────────────────
+   4. Sobreescritura del tema HeroUI — Acento azul corporativo
+   HeroUI v3 usa oklch — #1a56db = oklch(0.456 0.186 254)
+───────────────────────────────────────────────────── */
+:root {
+  /* Fuente */
+  --font-sans: "Onest", sans-serif;
+
+  /* ═══════════════════════════════════════════════════════
+     TOKENS DE HEROUI (re-tematización tipo daisyUI)
+     Todos los componentes de HeroUI (Button, Chip, Alert, Card,
+     Input, etc.) leen estos tokens. Aquí los apuntamos a la paleta
+     de marca --ff-* de abajo → UNA sola fuente de verdad.
+     Las variantes -hover / -soft las calcula HeroUI solo.
+     ═══════════════════════════════════════════════════════ */
+
+  /* Acento / marca */
+  --accent:            var(--ff-brand);
+  --accent-foreground: #ffffff;
+
+  /* Fondo y texto */
+  --background:        var(--ff-bg);
+  --foreground:        var(--ff-text-b);
+  --muted:             var(--ff-text-m);
+
+  /* Superficies (cards, etc.) */
+  --surface:             var(--ff-bg-white);
+  --surface-foreground:  var(--ff-text-h);
+  --surface-secondary:   var(--ff-bg-hover);
+
+  /* Bordes / separadores */
+  --border:    var(--ff-border);
+  --separator: var(--ff-border);
+
+  /* Semánticos */
+  --success:            var(--ff-success);
+  --success-foreground: #ffffff;
+  --warning:            var(--ff-warning);
+  --warning-foreground: #ffffff;
+  --danger:             var(--ff-danger);
+  --danger-foreground:  #ffffff;
+
+  /* Forma */
+  --radius: 0.5rem; /* 8px (radio base de campos/cards) */
+
+  /* ── Variables propias FactFast (paleta base de marca) ── */
+
+  /* Índigo Corporativo */
+  --ff-brand:     #4f46e5;
+  --ff-brand-dk:  #4338ca;
+  --ff-brand-lt:  #eff6ff;
+  --ff-brand-mid: #6366f1;
+  --ff-brand-bdr: #c7d2fe;
+
+  /* Fondo de la app */
+  --ff-bg:        #f8fafc;
+  --ff-bg-white:  #ffffff;
+  --ff-bg-hover:  #f1f5f9;
+  --ff-bg-active: #e0e7ff;
+
+  /* Sidebar claro y elegante */
+  --ff-sidebar:        #ffffff;
+  --ff-sidebar-hover:  #f8fafc;
+  --ff-sidebar-text:   #0f172a;
+  --ff-sidebar-muted:  #64748b;
+  --ff-sidebar-accent: #4f46e5;
+
+  /* Bordes */
+  --ff-border:       #e2e8f0;
+  --ff-border-dark:  #cbd5e1;
+  --ff-border-focus: #4f46e5;
+
+  /* Texto sobre fondo claro */
+  --ff-text-h:  #0b1f3b;    /* navy oscuro para headings */
+  --ff-text-b:  #1e293b;    /* slate para body */
+  --ff-text-m:  #64748b;    /* muted */
+  --ff-text-l:  #94a3b8;    /* light */
+
+  /* Semánticos (Verde Esmeralda/Menta) */
+  --ff-success:     #10b981;
+  --ff-success-bg:  #ecfdf5;
+  --ff-success-bdr: #a7f3d0;
+  --ff-success-txt: #047857;
+
+  --ff-danger:      #ef4444;
+  --ff-danger-bg:   #fef2f2;
+  --ff-danger-bdr:  #fecaca;
+  --ff-danger-txt:  #991b1b;
+
+  --ff-warning:     #f59e0b;
+  --ff-warning-bg:  #fffbeb;
+  --ff-warning-bdr: #fde68a;
+  --ff-warning-txt: #92400e;
+
+  /* Sombras (sutiles y flotantes) */
+  --ff-shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.04);
+  --ff-shadow-sm: 0 2px 8px rgba(15, 23, 42, 0.04);
+  --ff-shadow:    0 4px 20px rgba(15, 23, 42, 0.06), 0 2px 6px rgba(15, 23, 42, 0.04);
+  --ff-shadow-lg: 0 12px 30px rgba(15, 23, 42, 0.08), 0 4px 12px rgba(15, 23, 42, 0.04);
+
+  /* Glow acento */
+  --ff-glow-brand: rgba(79, 70, 229, 0.15);
+}
+
+/* ─────────────────────────────────────────────────────
+   5. Base — reset y tipografía
+   IMPORTANTE: va en @layer base para NO pisar los estilos
+   de HeroUI (@layer components) ni las utilidades de Tailwind
+   (@layer utilities). El CSS sin capa gana a todas las capas,
+   por eso un reset sin capa borraba el padding de los botones
+   e inputs de HeroUI. Orden: theme < base < components < utilities.
+───────────────────────────────────────────────────── */
+@layer base {
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html {
+    scroll-behavior: smooth;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-feature-settings: "kern" 1, "liga" 1, "calt" 1;
+  }
+
+  body {
+    background-color: var(--ff-bg);
+    color: var(--ff-text-b);
+    font-family: "Onest", sans-serif;
+    font-size: 16px;
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+
+  ::selection { background: var(--ff-brand); color: #fff; }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--ff-border-dark); border-radius: 99px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--ff-brand); }
+}
+
+/* ─────────────────────────────────────────────────────
+   6. Animaciones
+───────────────────────────────────────────────────── */
+@keyframes ff-fade-up {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes ff-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+.ff-fade-up    { animation: ff-fade-up 0.35s ease both; }
+.ff-fade-up-d1 { animation: ff-fade-up 0.35s 0.07s ease both; }
+.ff-fade-up-d2 { animation: ff-fade-up 0.35s 0.14s ease both; }
+.ff-fade-up-d3 { animation: ff-fade-up 0.35s 0.21s ease both; }
+.ff-fade-in    { animation: ff-fade-in 0.25s ease both; }

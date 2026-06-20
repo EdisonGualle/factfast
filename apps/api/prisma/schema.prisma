@@ -1,0 +1,860 @@
+// Schema Prisma — FactFast SaaS ERP/POS Ecuador
+// Convenciones:
+//   - Nombres de tablas y columnas: español, snake_case, plurales
+//   - Timestamps: created_at / updated_at / deleted_at (estándar inglés)
+//   - IDs: UUID v4
+//   - Montos: DECIMAL(14,2) — el SRI acepta hasta 14 dígitos
+//   - Borrado: solo soft delete via deleted_at
+
+generator client {
+  provider        = "prisma-client-js"
+  // Query Compiler experimental deshabilitado — causa bugs en v7.8 con create()
+  queryCompiler   = false
+  engineType      = "binary"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─────────────────────────────────────────────
+// ENUMERACIONES
+// ─────────────────────────────────────────────
+
+enum RolUsuario {
+  SUPERADMIN    // Dueño del SaaS — acceso total
+  OWNER_TENANT  // Propietario del tenant
+  ADMIN_EMPRESA // Administrador de empresa
+  CAJERO        // Operador de caja POS
+  BODEGUERO     // Control de inventario
+  CONTADOR      // Acceso a reportes y comprobantes
+  AUDITOR       // Solo lectura
+}
+
+enum RegimenTributario {
+  GENERAL                 // Régimen General
+  RIMPE_EMPRENDEDOR       // RIMPE Emprendedor
+  RIMPE_NEGOCIO_POPULAR   // RIMPE Negocio Popular
+  AGENTE_RETENCION        // Agente de Retención
+}
+
+enum TipoComprobante {
+  FACTURA              // Código SRI: 01
+  LIQUIDACION_COMPRA   // Código SRI: 03
+  NOTA_CREDITO         // Código SRI: 04
+  NOTA_DEBITO          // Código SRI: 05
+  GUIA_REMISION        // Código SRI: 06
+  RETENCION            // Código SRI: 07
+}
+
+enum EstadoComprobante {
+  BORRADOR   // Guardado, pendiente de firma
+  FIRMADO    // XML firmado, pendiente de envío al SRI
+  ENVIADO    // Enviado al SRI (RECIBIDA), pendiente de autorización
+  AUTORIZADO // Autorizado por el SRI
+  FALLIDO    // Falló tras todos los reintentos
+  ANULADO    // Anulado en el SRI
+}
+
+enum AmbienteSRI {
+  PRUEBAS    // celcer.sri.gob.ec — código 1
+  PRODUCCION // cel.sri.gob.ec — código 2
+}
+
+enum TipoImpuesto {
+  IVA              // Código SRI: 2
+  ICE              // Código SRI: 3
+  IRBPNR           // Código SRI: 5 (botellas)
+  RETENCION_FUENTE // Impuesto a la Renta
+  RETENCION_IVA    // Retención de IVA
+}
+
+enum EstadoSuscripcion {
+  TRIAL      // Período de prueba
+  ACTIVA     // Suscripción vigente y pagada
+  SUSPENDIDA // Pago pendiente
+  CANCELADA  // Cancelada por el cliente
+  VENCIDA    // Expiró sin renovar
+}
+
+enum TipoProducto {
+  PRODUCTO  // Bien físico — descuenta stock
+  SERVICIO  // Servicio — NO descuenta stock
+  COMBO     // Agrupación de varios productos
+}
+
+enum TipoMovimientoInventario {
+  ENTRADA_COMPRA       // Ingreso por orden de compra
+  SALIDA_VENTA         // Egreso por venta/POS
+  AJUSTE_POSITIVO      // Ajuste manual de entrada
+  AJUSTE_NEGATIVO      // Ajuste manual de salida
+  TRANSFERENCIA_SALIDA // Sale de una bodega
+  TRANSFERENCIA_ENTRADA // Entra a otra bodega
+  DEVOLUCION_CLIENTE   // Retorno de mercancía
+}
+
+// ─────────────────────────────────────────────
+// SAAS — TENANTS
+// ─────────────────────────────────────────────
+
+// Tenant: cuenta comercial del SaaS (el cliente que paga)
+model Tenant {
+  id         String    @id @default(uuid()) @db.Uuid
+  nombre     String    @db.VarChar(200)
+  // Slug único para URLs y referencias: ej. "grupo-andino"
+  slug       String    @unique @db.VarChar(100)
+  activo     Boolean   @default(true)
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+  deleted_at DateTime?
+
+  empresas               Empresa[]
+  suscripcion            Suscripcion?
+  api_keys               ApiKey[]
+  usuarios               Usuario[]
+  sucursales             Sucursal[]
+  puntos_emision         PuntoEmision[]
+  cajas                  Caja[]
+  sesiones_caja          SesionCaja[]
+  bodegas                Bodega[]
+  stocks_producto        StockProducto[]
+  movimientos_inventario MovimientoInventario[]
+  clientes               Cliente[]
+  proveedores            Proveedor[]
+  categorias             Categoria[]
+  productos              Producto[]
+  certificados           CertificadoDigital[]
+  comprobantes           Comprobante[]
+  comprobantes_recibidos ComprobanteRecibido[]
+  webhooks               Webhook[]
+
+  @@map("tenants")
+}
+
+// Plan SaaS con límites por funcionalidad
+model Plan {
+  id                   String   @id @default(uuid()) @db.Uuid
+  nombre               String   @db.VarChar(100)
+  slug                 String   @unique @db.VarChar(50)
+  descripcion          String?  @db.Text
+  precio_mensual       Decimal  @db.Decimal(10, 2)
+  // Límites operativos
+  max_empresas         Int
+  max_sucursales       Int
+  max_cajas            Int
+  max_usuarios         Int
+  max_comprobantes_mes Int
+  max_productos        Int
+  max_bodegas          Int
+  // Funcionalidades incluidas
+  incluye_api          Boolean  @default(false)
+  incluye_webhooks     Boolean  @default(false)
+  incluye_lotes        Boolean  @default(false)
+  incluye_reportes_avanzados Boolean @default(false)
+  activo               Boolean  @default(true)
+  created_at           DateTime @default(now())
+
+  suscripciones Suscripcion[]
+
+  @@map("planes")
+}
+
+// Suscripción activa del tenant a un plan
+model Suscripcion {
+  id           String            @id @default(uuid()) @db.Uuid
+  tenant_id    String            @unique @db.Uuid
+  plan_id      String            @db.Uuid
+  estado       EstadoSuscripcion @default(TRIAL)
+  fecha_inicio DateTime
+  fecha_fin    DateTime?
+  created_at   DateTime          @default(now())
+  updated_at   DateTime          @updatedAt
+
+  tenant Tenant @relation(fields: [tenant_id], references: [id])
+  plan   Plan   @relation(fields: [plan_id], references: [id])
+
+  @@map("suscripciones")
+}
+
+// ─────────────────────────────────────────────
+// EMPRESAS
+// ─────────────────────────────────────────────
+
+model Empresa {
+  id                          String            @id @default(uuid()) @db.Uuid
+  tenant_id                   String            @db.Uuid
+  ruc                         String            @db.VarChar(13)
+  razon_social                String            @db.VarChar(300)
+  nombre_comercial            String?           @db.VarChar(300)
+  regimen_tributario          RegimenTributario @default(GENERAL)
+  ambiente_sri                AmbienteSRI       @default(PRUEBAS)
+  direccion_matriz            String?           @db.VarChar(300)
+  telefono                    String?           @db.VarChar(20)
+  correo                      String?           @db.VarChar(150)
+  url_logo                    String?           @db.VarChar(500)
+  numero_resolucion           String?           @db.VarChar(13)
+  resolucion_agente_retencion String?           @db.VarChar(8)
+  sri_usuario                 String?           @db.VarChar(13)
+  sri_contrasena_encriptada   String?           @db.VarChar(500)
+  obligado_contabilidad       Boolean           @default(false)
+  activo                      Boolean           @default(true)
+  created_at                  DateTime          @default(now())
+  updated_at                  DateTime          @updatedAt
+  deleted_at                  DateTime?
+
+  tenant       Tenant               @relation(fields: [tenant_id], references: [id])
+  sucursales   Sucursal[]
+  usuarios     Usuario[]
+  certificados CertificadoDigital[]
+  comprobantes Comprobante[]
+  clientes     Cliente[]
+  proveedores  Proveedor[]
+  productos    Producto[]
+  categorias   Categoria[]
+  webhooks     Webhook[]
+
+  // RUC único por tenant (misma empresa no puede registrarse dos veces en el mismo tenant)
+  @@unique([tenant_id, ruc])
+  @@index([tenant_id])
+  @@map("empresas")
+}
+
+// ─────────────────────────────────────────────
+// SUCURSALES (ESTABLECIMIENTOS)
+// ─────────────────────────────────────────────
+
+model Sucursal {
+  id         String    @id @default(uuid()) @db.Uuid
+  tenant_id  String?   @db.Uuid
+  empresa_id String    @db.Uuid
+  // Código de 3 dígitos según SRI: 001, 002...
+  codigo     String    @db.VarChar(3)
+  nombre     String    @db.VarChar(200)
+  direccion  String    @db.VarChar(300)
+  ciudad     String?   @db.VarChar(100)
+  telefono   String?   @db.VarChar(20)
+  es_matriz  Boolean   @default(false)
+  activo     Boolean   @default(true)
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+  deleted_at DateTime?
+
+  tenant         Tenant?        @relation(fields: [tenant_id], references: [id])
+  empresa        Empresa        @relation(fields: [empresa_id], references: [id])
+  puntos_emision PuntoEmision[]
+  cajas          Caja[]
+  bodegas        Bodega[]
+
+  // No puede haber dos sucursales con el mismo código en la misma empresa
+  @@unique([empresa_id, codigo])
+  @@index([tenant_id])
+  @@map("sucursales")
+}
+
+// ─────────────────────────────────────────────
+// PUNTOS DE EMISIÓN SRI
+// ─────────────────────────────────────────────
+
+model PuntoEmision {
+  id          String    @id @default(uuid()) @db.Uuid
+  tenant_id   String?   @db.Uuid
+  sucursal_id String    @db.Uuid
+  // Código de 3 dígitos según SRI: 001, 002...
+  codigo      String    @db.VarChar(3)
+  nombre      String    @db.VarChar(200)
+  // Secuencias por tipo de comprobante — 9 dígitos según SRI
+  // IMPORTANTE: se actualiza con SELECT FOR UPDATE dentro de transacción
+  secuencia_factura        Int @default(1)
+  secuencia_liquidacion    Int @default(1)
+  secuencia_nota_credito   Int @default(1)
+  secuencia_nota_debito    Int @default(1)
+  secuencia_guia_remision  Int @default(1)
+  secuencia_retencion      Int @default(1)
+  activo     Boolean   @default(true)
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+  deleted_at DateTime?
+
+  tenant       Tenant?       @relation(fields: [tenant_id], references: [id])
+  sucursal     Sucursal      @relation(fields: [sucursal_id], references: [id])
+  comprobantes Comprobante[]
+
+  @@unique([sucursal_id, codigo])
+  @@index([tenant_id])
+  @@map("puntos_emision")
+}
+
+// ─────────────────────────────────────────────
+// CAJAS Y SESIONES
+// ─────────────────────────────────────────────
+
+// Caja física o lógica de ventas POS
+model Caja {
+  id          String    @id @default(uuid()) @db.Uuid
+  tenant_id   String?   @db.Uuid
+  sucursal_id String    @db.Uuid
+  nombre      String    @db.VarChar(100)
+  activo      Boolean   @default(true)
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @updatedAt
+  deleted_at  DateTime?
+
+  tenant   Tenant?      @relation(fields: [tenant_id], references: [id])
+  sucursal Sucursal     @relation(fields: [sucursal_id], references: [id])
+  sesiones SesionCaja[]
+
+  @@index([tenant_id])
+  @@map("cajas")
+}
+
+// Sesión de apertura y cierre de caja
+model SesionCaja {
+  id             String    @id @default(uuid()) @db.Uuid
+  tenant_id      String?   @db.Uuid
+  caja_id        String    @db.Uuid
+  usuario_id     String    @db.Uuid
+  monto_apertura Decimal   @db.Decimal(14, 2)
+  monto_cierre   Decimal?  @db.Decimal(14, 2)
+  total_ventas   Decimal   @db.Decimal(14, 2) @default(0)
+  total_efectivo Decimal   @db.Decimal(14, 2) @default(0)
+  total_tarjeta  Decimal   @db.Decimal(14, 2) @default(0)
+  observacion    String?   @db.Text
+  abierta_en     DateTime  @default(now())
+  cerrada_en     DateTime?
+
+  tenant Tenant? @relation(fields: [tenant_id], references: [id])
+  caja   Caja    @relation(fields: [caja_id], references: [id])
+
+  @@index([caja_id])
+  @@index([tenant_id])
+  @@map("sesiones_caja")
+}
+
+// ─────────────────────────────────────────────
+// BODEGAS E INVENTARIO
+// ─────────────────────────────────────────────
+
+// Bodega donde se administra stock
+model Bodega {
+  id          String    @id @default(uuid()) @db.Uuid
+  tenant_id   String?   @db.Uuid
+  sucursal_id String    @db.Uuid
+  nombre      String    @db.VarChar(100)
+  activo      Boolean   @default(true)
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @updatedAt
+  deleted_at  DateTime?
+
+  tenant      Tenant?           @relation(fields: [tenant_id], references: [id])
+  sucursal    Sucursal          @relation(fields: [sucursal_id], references: [id])
+  stocks      StockProducto[]
+  movimientos MovimientoInventario[]
+
+  @@index([tenant_id])
+  @@map("bodegas")
+}
+
+// Stock actual por producto y bodega
+model StockProducto {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenant_id   String?  @db.Uuid
+  producto_id String   @db.Uuid
+  bodega_id   String   @db.Uuid
+  amount      Decimal  @db.Decimal(14, 4) @default(0) @map("cantidad")
+  updated_at  DateTime @updatedAt
+
+  tenant   Tenant?  @relation(fields: [tenant_id], references: [id])
+  producto Producto @relation(fields: [producto_id], references: [id])
+  bodega   Bodega   @relation(fields: [bodega_id], references: [id])
+
+  // Un producto tiene exactamente un stock por bodega
+  @@unique([producto_id, bodega_id])
+  @@index([tenant_id])
+  @@map("stock_productos")
+}
+
+// Kardex — registro de cada movimiento de inventario
+model MovimientoInventario {
+  id          String                   @id @default(uuid()) @db.Uuid
+  tenant_id   String?                  @db.Uuid
+  producto_id String                   @db.Uuid
+  bodega_id   String                   @db.Uuid
+  tipo        TipoMovimientoInventario
+  cantidad    Decimal                  @db.Decimal(14, 4)
+  // Saldo resultante tras el movimiento
+  saldo       Decimal                  @db.Decimal(14, 4)
+  costo       Decimal?                 @db.Decimal(14, 6)
+  // Referencia al documento que generó el movimiento
+  referencia  String?                  @db.VarChar(100) // ej: "FACTURA-001-001-000000001"
+  nota        String?                  @db.VarChar(300)
+  usuario_id  String?                  @db.Uuid
+  created_at  DateTime                 @default(now())
+
+  tenant   Tenant?  @relation(fields: [tenant_id], references: [id])
+  producto Producto @relation(fields: [producto_id], references: [id])
+  bodega   Bodega   @relation(fields: [bodega_id], references: [id])
+
+  @@index([producto_id, bodega_id])
+  @@index([created_at])
+  @@index([tenant_id])
+  @@map("movimientos_inventario")
+}
+
+// ─────────────────────────────────────────────
+// CLIENTES Y PROVEEDORES
+// ─────────────────────────────────────────────
+
+// Cliente de facturación
+model Cliente {
+  id                  String    @id @default(uuid()) @db.Uuid
+  tenant_id           String?   @db.Uuid
+  empresa_id          String    @db.Uuid
+  tipo_identificacion String    @db.VarChar(2)  // Tabla 6 SRI
+  identificacion      String    @db.VarChar(20)
+  razon_social        String    @db.VarChar(300)
+  nombre_comercial    String?   @db.VarChar(300)
+  correo              String?   @db.VarChar(150)
+  telefono            String?   @db.VarChar(20)
+  direccion           String?   @db.VarChar(300)
+  ciudad              String?   @db.VarChar(100)
+  es_consumidor_final Boolean   @default(false)
+  activo              Boolean   @default(true)
+  created_at          DateTime  @default(now())
+  updated_at          DateTime  @updatedAt
+  deleted_at          DateTime?
+
+  tenant  Tenant? @relation(fields: [tenant_id], references: [id])
+  empresa Empresa @relation(fields: [empresa_id], references: [id])
+
+  // Identificación única por empresa
+  @@unique([empresa_id, identificacion])
+  @@index([empresa_id])
+  @@index([tenant_id])
+  @@map("clientes")
+}
+
+// Proveedor de compras
+model Proveedor {
+  id                  String    @id @default(uuid()) @db.Uuid
+  tenant_id           String?   @db.Uuid
+  empresa_id          String    @db.Uuid
+  tipo_identificacion String    @db.VarChar(2)
+  identificacion      String    @db.VarChar(20)
+  razon_social        String    @db.VarChar(300)
+  nombre_comercial    String?   @db.VarChar(300)
+  correo              String?   @db.VarChar(150)
+  telefono            String?   @db.VarChar(20)
+  direccion           String?   @db.VarChar(300)
+  activo              Boolean   @default(true)
+  created_at          DateTime  @default(now())
+  updated_at          DateTime  @updatedAt
+  deleted_at          DateTime?
+
+  tenant  Tenant? @relation(fields: [tenant_id], references: [id])
+  empresa Empresa @relation(fields: [empresa_id], references: [id])
+
+  @@unique([empresa_id, identificacion])
+  @@index([empresa_id])
+  @@index([tenant_id])
+  @@map("proveedores")
+}
+
+// ─────────────────────────────────────────────
+// CATÁLOGO DE PRODUCTOS
+// ─────────────────────────────────────────────
+
+// Categoría de producto
+model Categoria {
+  id         String    @id @default(uuid()) @db.Uuid
+  tenant_id  String?   @db.Uuid
+  empresa_id String    @db.Uuid
+  nombre     String    @db.VarChar(100)
+  activo     Boolean   @default(true)
+  created_at DateTime  @default(now())
+
+  tenant    Tenant?    @relation(fields: [tenant_id], references: [id])
+  empresa   Empresa    @relation(fields: [empresa_id], references: [id])
+  productos Producto[]
+
+  @@index([empresa_id])
+  @@index([tenant_id])
+  @@map("categorias")
+}
+
+// Producto o servicio del catálogo
+model Producto {
+  id              String       @id @default(uuid()) @db.Uuid
+  tenant_id       String?      @db.Uuid
+  empresa_id      String       @db.Uuid
+  categoria_id    String?      @db.Uuid
+  // Código interno y código de barras
+  codigo          String?      @db.VarChar(25)
+  codigo_barras   String?      @db.VarChar(50)
+  nombre          String       @db.VarChar(300)
+  descripcion     String?      @db.Text
+  tipo            TipoProducto @default(PRODUCTO)
+  precio_venta    Decimal      @db.Decimal(14, 6)
+  precio_costo    Decimal?     @db.Decimal(14, 6)
+  // Código de tarifa IVA según Tabla 17 SRI: 4=15%, 0=0%, 5=5%, 6=NoObjeto, 7=Exento
+  codigo_tarifa_iva Int        @default(4)
+  stock_minimo    Decimal      @db.Decimal(14, 2) @default(0)
+  activo          Boolean      @default(true)
+  created_at      DateTime     @default(now())
+  updated_at      DateTime     @updatedAt
+  deleted_at      DateTime?
+
+  tenant      Tenant?               @relation(fields: [tenant_id], references: [id])
+  empresa     Empresa               @relation(fields: [empresa_id], references: [id])
+  categoria   Categoria?            @relation(fields: [categoria_id], references: [id])
+  stocks      StockProducto[]
+  movimientos MovimientoInventario[]
+
+  @@index([empresa_id])
+  @@index([tenant_id])
+  @@map("productos")
+}
+
+// ─────────────────────────────────────────────
+// CERTIFICADOS DIGITALES — BÓVEDA AES-256-GCM
+// ─────────────────────────────────────────────
+
+model CertificadoDigital {
+  id                    String   @id @default(uuid()) @db.Uuid
+  tenant_id             String?  @db.Uuid
+  empresa_id            String   @db.Uuid
+  nombre_titular        String   @db.VarChar(300)
+  ruc_titular           String   @db.VarChar(13)
+  // El archivo .p12 encriptado — NUNCA en texto plano
+  datos_encriptados     Bytes
+  iv_encriptacion       String   @db.VarChar(32)  // IV hex (AES-256-GCM)
+  tag_autenticacion     String   @db.VarChar(32)  // Auth tag hex
+  // Contraseña del .p12 también encriptada
+  contrasena_encriptada String   @db.VarChar(500)
+  fecha_vencimiento     DateTime
+  activo                Boolean  @default(true)
+  created_at            DateTime @default(now())
+  updated_at            DateTime @updatedAt
+
+  tenant  Tenant? @relation(fields: [tenant_id], references: [id])
+  empresa Empresa @relation(fields: [empresa_id], references: [id])
+
+  @@index([tenant_id])
+  @@map("certificados_digitales")
+}
+
+// ─────────────────────────────────────────────
+// USUARIOS
+// ─────────────────────────────────────────────
+
+model Usuario {
+  id              String     @id @default(uuid()) @db.Uuid
+  tenant_id       String?    @db.Uuid // Null solo para SUPERADMIN global
+  empresa_id      String?    @db.Uuid // Null para OWNER_TENANT sin empresa asignada
+  correo          String     @unique @db.VarChar(150)
+  hash_contrasena String     @db.VarChar(100) // bcrypt salt 12
+  nombre_completo String     @db.VarChar(200)
+  rol             RolUsuario @default(CAJERO)
+  activo          Boolean    @default(true)
+  created_at      DateTime   @default(now())
+  updated_at      DateTime   @updatedAt
+  deleted_at      DateTime?
+
+  tenant         Tenant?       @relation(fields: [tenant_id], references: [id])
+  empresa        Empresa?      @relation(fields: [empresa_id], references: [id])
+  tokens_refresh TokenRefresh[]
+
+  @@index([tenant_id])
+  @@map("usuarios")
+}
+
+model TokenRefresh {
+  id          String    @id @default(uuid()) @db.Uuid
+  usuario_id  String    @db.Uuid
+  hash_token  String    @unique @db.VarChar(100) // SHA-256 del token
+  expira_en   DateTime
+  created_at  DateTime  @default(now())
+  revocado_en DateTime? // Si está seteado, el token fue revocado
+
+  usuario Usuario @relation(fields: [usuario_id], references: [id])
+
+  @@map("tokens_refresh")
+}
+
+// ─────────────────────────────────────────────
+// COMPROBANTES ELECTRÓNICOS
+// ─────────────────────────────────────────────
+
+model Comprobante {
+  id               String            @id @default(uuid()) @db.Uuid
+  tenant_id        String?           @db.Uuid
+  empresa_id       String            @db.Uuid
+  punto_emision_id String            @db.Uuid
+  tipo_comprobante TipoComprobante
+  estado           EstadoComprobante @default(BORRADOR)
+
+  // Clave de acceso de 49 dígitos (Módulo 11) — única por comprobante
+  clave_acceso       String  @unique @db.VarChar(49)
+  // Header para idempotencia — evita duplicados por error de red
+  clave_idempotencia String? @unique @db.VarChar(64)
+
+  // Serie: código_estab + código_pto_emision (ej: "001001")
+  serie             String @db.VarChar(6)
+  // Número secuencial de 9 dígitos (ej: "000000001")
+  numero_secuencial String @db.VarChar(9)
+
+  // Datos del receptor / comprador
+  tipo_identificacion_comprador String  @db.VarChar(2) // Tabla 6 SRI
+  identificacion_comprador      String  @db.VarChar(20)
+  razon_social_comprador        String  @db.VarChar(300)
+  correo_comprador              String? @db.VarChar(150)
+  direccion_comprador           String? @db.VarChar(300)
+
+  // Totales monetarios — DECIMAL(14,2) según especificación SRI
+  subtotal_sin_impuestos Decimal @db.Decimal(14, 2) @default(0)
+  total_descuento        Decimal @db.Decimal(14, 2) @default(0)
+  subtotal_iva_0         Decimal @db.Decimal(14, 2) @default(0)
+  subtotal_iva_5         Decimal @db.Decimal(14, 2) @default(0)
+  subtotal_iva_12        Decimal @db.Decimal(14, 2) @default(0)
+  subtotal_iva_15        Decimal @db.Decimal(14, 2) @default(0)
+  subtotal_no_objeto     Decimal @db.Decimal(14, 2) @default(0)
+  subtotal_exento        Decimal @db.Decimal(14, 2) @default(0)
+  total_ice              Decimal @db.Decimal(14, 2) @default(0)
+  total_irbpnr           Decimal @db.Decimal(14, 2) @default(0)
+  total_iva              Decimal @db.Decimal(14, 2) @default(0)
+  propina                Decimal @db.Decimal(14, 2) @default(0)
+  importe_total          Decimal @db.Decimal(14, 2) @default(0)
+
+  // URLs de archivos generados (MinIO/S3/Cloudflare R2)
+  url_xml String? @db.VarChar(500)
+  url_pdf String? @db.VarChar(500)
+
+  // Respuesta del SRI
+  numero_autorizacion String?  @db.VarChar(49)
+  fecha_autorizacion  DateTime?
+  respuesta_sri_raw   String?  @db.Text // XML crudo de respuesta
+
+  // Control de reintentos BullMQ
+  intentos_envio Int     @default(0)
+  ultimo_error   String? @db.Text
+
+  // Referencia al comprobante original (para NC, ND, Retenciones)
+  comprobante_referencia_id String? @db.Uuid
+
+  fecha_emision DateTime @default(now())
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  tenant             Tenant?                @relation(fields: [tenant_id], references: [id])
+  empresa            Empresa                @relation(fields: [empresa_id], references: [id])
+  punto_emision      PuntoEmision           @relation(fields: [punto_emision_id], references: [id])
+  lineas             LineaComprobante[]
+  impuestos          ImpuestoComprobante[]
+  formas_pago        FormaPagoComprobante[]
+  campos_adicionales CampoAdicional[]
+
+  @@index([empresa_id, estado])
+  @@index([empresa_id, tipo_comprobante])
+  @@index([clave_acceso])
+  @@index([tenant_id])
+  @@map("comprobantes")
+}
+
+// Líneas de detalle del comprobante (productos/servicios)
+model LineaComprobante {
+  id                        String  @id @default(uuid()) @db.Uuid
+  comprobante_id            String  @db.Uuid
+  numero_linea              Int
+  codigo_principal          String? @db.VarChar(25)  // codigoPrincipal en XML
+  codigo_auxiliar           String? @db.VarChar(25)  // codigoAuxiliar en XML
+  descripcion               String  @db.VarChar(300)
+  cantidad                  Decimal @db.Decimal(14, 6)
+  precio_unitario           Decimal @db.Decimal(14, 6)
+  descuento                 Decimal @db.Decimal(14, 2) @default(0)
+  precio_total_sin_impuesto Decimal @db.Decimal(14, 2)
+  // Código de tarifa IVA según Tabla 17 SRI: 0, 4 (15%), 5 (5%), 6, 7...
+  codigo_tarifa_iva         Int     @default(4) // 4 = 15% (tarifa actual)
+
+  comprobante Comprobante   @relation(fields: [comprobante_id], references: [id])
+  impuestos   ImpuestoLinea[]
+
+  @@map("lineas_comprobante")
+}
+
+// Impuestos por línea de detalle
+model ImpuestoLinea {
+  id                String       @id @default(uuid()) @db.Uuid
+  linea_id          String       @db.Uuid
+  tipo_impuesto     TipoImpuesto
+  codigo_impuesto   String       @db.VarChar(4) // Tabla 16 SRI: 2=IVA, 3=ICE, 5=IRBPNR
+  codigo_porcentaje String       @db.VarChar(4) // Tabla 17/18 SRI
+  tarifa            Decimal      @db.Decimal(8, 4)  // Ej: 15.0000
+  base_imponible    Decimal      @db.Decimal(14, 2)
+  valor             Decimal      @db.Decimal(14, 2)
+
+  linea LineaComprobante @relation(fields: [linea_id], references: [id])
+
+  @@map("impuestos_linea")
+}
+
+// Totales de impuestos del comprobante (totalConImpuestos en XML)
+model ImpuestoComprobante {
+  id                String       @id @default(uuid()) @db.Uuid
+  comprobante_id    String       @db.Uuid
+  tipo_impuesto     TipoImpuesto
+  codigo_impuesto   String       @db.VarChar(4)
+  codigo_porcentaje String       @db.VarChar(4)
+  base_imponible    Decimal      @db.Decimal(14, 2)
+  valor             Decimal      @db.Decimal(14, 2)
+
+  comprobante Comprobante @relation(fields: [comprobante_id], references: [id])
+
+  @@map("impuestos_comprobante")
+}
+
+// Formas de pago (pagos en XML de factura — Tabla 24 SRI)
+model FormaPagoComprobante {
+  id             String  @id @default(uuid()) @db.Uuid
+  comprobante_id String  @db.Uuid
+  // Código según Tabla 24 SRI: 01=Efectivo, 19=TC, 16=Débito, etc.
+  forma_pago     String  @db.VarChar(2)
+  total          Decimal @db.Decimal(14, 2)
+  plazo          Int?    // En días (cuando es crédito)
+  unidad_tiempo  String? @db.VarChar(10) // "dias", "meses"
+
+  comprobante Comprobante @relation(fields: [comprobante_id], references: [id])
+
+  @@map("formas_pago_comprobante")
+}
+
+// Campos adicionales del comprobante (infoAdicional en XML — máx 300 chars)
+model CampoAdicional {
+  id             String @id @default(uuid()) @db.Uuid
+  comprobante_id String @db.Uuid
+  nombre         String @db.VarChar(300)
+  valor          String @db.VarChar(300)
+
+  comprobante Comprobante @relation(fields: [comprobante_id], references: [id])
+
+  @@map("campos_adicionales")
+}
+
+// ─────────────────────────────────────────────
+// COMPROBANTES RECIBIDOS — BOT RPA
+// ─────────────────────────────────────────────
+
+model ComprobanteRecibido {
+  id                  String          @id @default(uuid()) @db.Uuid
+  tenant_id           String?         @db.Uuid
+  empresa_id          String          @db.Uuid
+  clave_acceso        String          @unique @db.VarChar(49)
+  tipo_comprobante    TipoComprobante
+  ruc_emisor          String          @db.VarChar(13)
+  razon_social_emisor String          @db.VarChar(300)
+  importe_total       Decimal         @db.Decimal(14, 2)
+  url_xml             String?         @db.VarChar(500)
+  numero_autorizacion String?         @db.VarChar(49)
+  fecha_autorizacion  DateTime?
+  fecha_emision       DateTime
+  fecha_descarga      DateTime        @default(now())
+  created_at          DateTime        @default(now())
+
+  tenant Tenant? @relation(fields: [tenant_id], references: [id])
+
+  @@index([empresa_id])
+  @@index([tenant_id])
+  @@map("comprobantes_recibidos")
+}
+
+// ─────────────────────────────────────────────
+// API KEYS Y WEBHOOKS
+// ─────────────────────────────────────────────
+
+// API Key para integraciones externas
+model ApiKey {
+  id          String    @id @default(uuid()) @db.Uuid
+  tenant_id   String    @db.Uuid
+  empresa_id  String?   @db.Uuid
+  nombre      String    @db.VarChar(100)
+  // Prefijo visible: sk_live_ o sk_test_
+  prefijo     String    @db.VarChar(20)
+  // Solo se guarda el hash SHA-256 — la clave completa se muestra una sola vez
+  hash_clave  String    @unique @db.VarChar(64)
+  // Scopes de acceso: ["facturas.emitir", "clientes.ver", ...]
+  scopes      String[]
+  activo      Boolean   @default(true)
+  created_at  DateTime  @default(now())
+  revocado_en DateTime?
+
+  tenant Tenant @relation(fields: [tenant_id], references: [id])
+
+  @@index([tenant_id])
+  @@map("api_keys")
+}
+
+// Webhook de integración externa
+model Webhook {
+  id         String    @id @default(uuid()) @db.Uuid
+  tenant_id  String?   @db.Uuid
+  empresa_id String    @db.Uuid
+  nombre     String    @db.VarChar(100)
+  url        String    @db.VarChar(500)
+  // Secreto para firma HMAC-SHA256 — almacenar encriptado
+  secreto    String    @db.VarChar(200)
+  // Eventos suscritos: ["comprobante.autorizado", "venta.creada", ...]
+  eventos    String[]
+  activo     Boolean   @default(true)
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+
+  tenant      Tenant?          @relation(fields: [tenant_id], references: [id])
+  empresa     Empresa          @relation(fields: [empresa_id], references: [id])
+  log_eventos LogEventoWebhook[]
+
+  @@index([tenant_id])
+  @@map("webhooks")
+}
+
+// Log de intentos de entrega de webhooks
+model LogEventoWebhook {
+  id          String   @id @default(uuid()) @db.Uuid
+  webhook_id  String   @db.Uuid
+  evento      String   @db.VarChar(100)
+  payload     Json
+  // Código HTTP de respuesta del endpoint
+  status_code Int?
+  respuesta   String?  @db.Text
+  exitoso     Boolean  @default(false)
+  intento     Int      @default(1)
+  created_at  DateTime @default(now())
+
+  webhook Webhook @relation(fields: [webhook_id], references: [id])
+
+  @@index([webhook_id])
+  @@map("log_eventos_webhook")
+}
+
+// ─────────────────────────────────────────────
+// AUDITORÍA — REGISTRO INMUTABLE
+// ─────────────────────────────────────────────
+
+model RegistroAuditoria {
+  id             String   @id @default(uuid()) @db.Uuid
+  tenant_id      String?  @db.Uuid
+  empresa_id     String?  @db.Uuid
+  usuario_id     String?  @db.Uuid
+  // Nombre de la entidad/tabla afectada
+  entidad        String   @db.VarChar(100)
+  entidad_id     String?  @db.VarChar(36)
+  // Acción realizada: CREAR, ACTUALIZAR, ELIMINAR, LOGIN, EMITIR, ANULAR, etc.
+  accion         String   @db.VarChar(50)
+  valores_antes  Json?    // Estado anterior
+  valores_despues Json?   // Estado posterior
+  ip_origen      String?  @db.VarChar(45)
+  agente_usuario String?  @db.VarChar(500)
+  created_at     DateTime @default(now())
+
+  @@index([empresa_id, entidad])
+  @@index([tenant_id])
+  @@index([created_at])
+  @@map("registros_auditoria")
+}

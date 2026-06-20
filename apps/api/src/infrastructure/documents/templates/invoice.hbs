@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>RIDE - Factura Electrónica</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: Arial, Helvetica, sans-serif;
+            font-size: 10px;
+            color: #111;
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            width: 100%;
+            padding: 10px 15px;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+        .header-left {
+            width: 48%;
+            display: flex;
+            flex-direction: column;
+        }
+        .header-right {
+            width: 49%;
+        }
+        .box {
+            border: 1px solid #000;
+            border-radius: 6px;
+            padding: 8px 12px;
+        }
+        .logo-container {
+            height: 110px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 10px;
+        }
+        .logo-placeholder {
+            border: 1px dashed #999;
+            width: 80%;
+            height: 90%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #999;
+            font-size: 18px;
+            font-weight: bold;
+        }
+        .text-bold { font-weight: bold; }
+        .text-center { text-align: center; }
+        .text-right { text-align: right; }
+        
+        .info-row { margin-bottom: 4px; line-height: 1.3; }
+        .info-label { font-weight: bold; margin-right: 4px; }
+        
+        .doc-title { font-size: 20px; font-weight: bold; letter-spacing: 1px; margin: 5px 0; }
+        .ruc-title { font-size: 14px; font-weight: bold; }
+        .auth-number { font-size: 12px; font-weight: bold; word-wrap: break-word; }
+        
+        .barcode-box { text-align: center; margin-top: 10px; }
+        .barcode-box img { width: 100%; height: 45px; }
+        
+        /* Buyer Section */
+        .buyer-box {
+            margin-bottom: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .buyer-grid {
+            display: grid;
+            grid-template-columns: max-content 1fr max-content 1fr;
+            gap: 4px 15px;
+            align-items: center;
+        }
+        
+        /* Tables */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 9px;
+        }
+        .table-items { margin-bottom: 10px; }
+        .table-items th, .table-items td {
+            border: 1px solid #000;
+            padding: 5px 6px;
+        }
+        .table-items th { background-color: #eaeaea; font-weight: bold; text-align: left; }
+        .table-items td.num { text-align: right; }
+        
+        .footer {
+            display: flex;
+            justify-content: space-between;
+        }
+        .footer-left { width: 62%; }
+        .footer-right { width: 35%; }
+        
+        .additional-box {
+            border: 1px solid #000;
+            padding: 8px;
+            margin-bottom: 8px;
+        }
+        .additional-title { font-weight: bold; margin-bottom: 6px; }
+        
+        .payments-table th, .payments-table td {
+            border: 1px solid #000;
+            padding: 5px;
+        }
+        .payments-table th { background-color: #eaeaea; font-weight: bold; text-align: left; }
+        
+        .totals-table th, .totals-table td {
+            border: 1px solid #000;
+            padding: 5px;
+        }
+        .totals-table th { text-align: left; font-weight: normal; }
+        .totals-table td { text-align: right; }
+        .totals-table tr.total th, .totals-table tr.total td {
+            font-weight: bold; background-color: #eaeaea;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        
+        <div class="header">
+            <div class="header-left">
+                <div class="logo-container">
+                    <div class="logo-placeholder">LOGOTIPO</div>
+                </div>
+                <div class="box" style="flex-grow: 1;">
+                    <div class="info-row text-bold" style="font-size: 13px; margin-bottom: 8px;">{{empresa.razon_social}}</div>
+                    {{#if empresa.nombre_comercial}}
+                    <div class="info-row"><span class="info-label">Dir. Comercial:</span> {{empresa.nombre_comercial}}</div>
+                    {{/if}}
+                    <div class="info-row"><span class="info-label">Dirección Matriz:</span> {{empresa.direccion_matriz}}</div>
+                    <div class="info-row"><span class="info-label">Dirección Sucursal:</span> {{punto_emision.sucursal.direccion}}</div>
+                    {{#if empresa.numero_resolucion}}
+                    <div class="info-row"><span class="info-label">Contribuyente Especial Nro:</span> {{empresa.numero_resolucion}}</div>
+                    {{/if}}
+                    <div class="info-row"><span class="info-label">OBLIGADO A LLEVAR CONTABILIDAD:</span> {{#if empresa.obligado_contabilidad}}SI{{else}}NO{{/if}}</div>
+                </div>
+            </div>
+            
+            <div class="header-right box">
+                <div class="ruc-title">R.U.C.: {{empresa.ruc}}</div>
+                <div class="doc-title">F A C T U R A</div>
+                <div class="info-row" style="font-size: 13px;"><span class="info-label">No.</span> {{serie}}-{{numero_secuencial}}</div>
+                
+                <br>
+                <div class="info-row info-label">NÚMERO DE AUTORIZACIÓN</div>
+                <div class="info-row auth-number">{{numero_autorizacion}}</div>
+                
+                <br>
+                <div class="info-row">
+                    <div style="display: flex; justify-content: space-between;">
+                        <span class="info-label">FECHA Y HORA DE AUTORIZACIÓN:</span>
+                        <span>{{fecha_autorizacion_str}}</span>
+                    </div>
+                </div>
+                <div class="info-row"><span class="info-label">AMBIENTE:</span> {{ambiente_sri}}</div>
+                <div class="info-row"><span class="info-label">EMISIÓN:</span> NORMAL</div>
+                
+                <div class="barcode-box">
+                    <div class="info-label" style="text-align: left; margin-bottom: 2px;">CLAVE DE ACCESO</div>
+                    <img src="{{barcodeBase64}}" />
+                    <div style="font-size: 11px; margin-top: 2px;">{{clave_acceso}}</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="box buyer-box">
+            <div class="buyer-grid">
+                <div class="info-label">Razón Social / Nombres y Apellidos:</div>
+                <div>{{razon_social_comprador}}</div>
+                
+                <div class="info-label">Identificación:</div>
+                <div>{{identificacion_comprador}}</div>
+                
+                <div class="info-label">Fecha Emisión:</div>
+                <div>{{fecha_emision_str}}</div>
+                
+                <div class="info-label">Guía Remisión:</div>
+                <div></div>
+            </div>
+        </div>
+
+        <table class="table-items">
+            <thead>
+                <tr>
+                    <th style="width: 10%;">Cod. Principal</th>
+                    <th class="text-center" style="width: 7%;">Cant</th>
+                    <th style="width: 45%;">Descripción</th>
+                    <th class="text-right" style="width: 12%;">Precio Unitario</th>
+                    <th class="text-right" style="width: 12%;">Descuento</th>
+                    <th class="text-right" style="width: 14%;">Precio Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{#each lineas}}
+                <tr>
+                    <td>{{this.codigo_principal}}</td>
+                    <td class="num">{{this.cantidad_fmt}}</td>
+                    <td>{{this.descripcion}}</td>
+                    <td class="num">{{this.precio_unitario_fmt}}</td>
+                    <td class="num">{{this.descuento_fmt}}</td>
+                    <td class="num">{{this.precio_total_sin_impuesto_fmt}}</td>
+                </tr>
+                {{/each}}
+            </tbody>
+        </table>
+
+        <div class="footer">
+            <div class="footer-left">
+                <div class="additional-box">
+                    <div class="additional-title">Información Adicional</div>
+                    {{#if direccion_comprador}}
+                    <div class="info-row"><span class="info-label">Dirección:</span> {{direccion_comprador}}</div>
+                    {{/if}}
+                    {{#if correo_comprador}}
+                    <div class="info-row"><span class="info-label">Email:</span> {{correo_comprador}}</div>
+                    {{/if}}
+                </div>
+                
+                <table class="payments-table">
+                    <thead>
+                        <tr>
+                            <th>Forma de Pago</th>
+                            <th class="text-right" style="width: 30%;">Valor</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{#each formas_pago}}
+                        <tr>
+                            <td>{{this.forma_pago}}</td>
+                            <td class="num text-bold">{{this.total_fmt}}</td>
+                        </tr>
+                        {{/each}}
+                    </tbody>
+                </table>
+            </div>
+            
+            <div class="footer-right">
+                <table class="totals-table">
+                    <tbody>
+                        <tr>
+                            <th>SUBTOTAL 15%</th>
+                            <td>{{total_gravado_fmt}}</td>
+                        </tr>
+                        <tr>
+                            <th>SUBTOTAL 0%</th>
+                            <td>0.00</td>
+                        </tr>
+                        <tr>
+                            <th>SUBTOTAL No objeto de IVA</th>
+                            <td>0.00</td>
+                        </tr>
+                        <tr>
+                            <th>SUBTOTAL Exento de IVA</th>
+                            <td>0.00</td>
+                        </tr>
+                        <tr>
+                            <th>SUBTOTAL SIN IMPUESTOS</th>
+                            <td>{{subtotal_sin_impuestos_fmt}}</td>
+                        </tr>
+                        <tr>
+                            <th>TOTAL Descuento</th>
+                            <td>{{total_descuento_fmt}}</td>
+                        </tr>
+                        <tr>
+                            <th>ICE</th>
+                            <td>0.00</td>
+                        </tr>
+                        <tr>
+                            <th>IVA 15%</th>
+                            <td>{{total_iva_fmt}}</td>
+                        </tr>
+                        <tr class="total">
+                            <th>VALOR TOTAL</th>
+                            <td>{{importe_total_fmt}}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </div>
+</body>
+</html>

@@ -1,0 +1,58 @@
+# Dependencias
+node_modules/
+
+# Variables de entorno (NUNCA en git)
+.env
+.env.local
+.env.*.local
+
+# Build / compilación
+dist/
+build/
+*.tsbuildinfo
+
+# Prisma generado
+/generated/
+prisma/migrations/dev.db*
+
+# Storage local (XML, PDF, certificados)
+storage/
+
+# Logs
+*.log
+nest-dev.err.log
+nest-dev.out.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Coverage / tests
+coverage/
+.nyc_output/
+
+# IDE
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.DS_Store
+Thumbs.db
+
+# Cache temporal
+.cache/
+*.tmp
+
+# Scripts de administración local (datos sensibles hardcodeados)
+create-superadmin.ts
+delete-company.ts
+change_env.ts
+get_ids.ts
+test-rpa.ts
+test-pdf.ts
+
+# Claude Code / agentes IA (config específica del entorno de desarrollo)
+.claude/
+.agents/
+skills-lock.json
