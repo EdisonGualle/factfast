@@ -15,6 +15,10 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
       [context.getHandler(), context.getClass()],
     );
     if (esPublico) return true;
+
+    const req = context.switchToHttp().getRequest<{ path: string }>();
+    if (req.path.endsWith('/metrics')) return true;
+
     return super.canActivate(context);
   }
 }

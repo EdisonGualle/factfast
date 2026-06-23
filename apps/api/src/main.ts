@@ -1,15 +1,17 @@
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe, VersioningType } from '@nestjs/common';
+import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
+import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, {
-    logger: ['error', 'warn', 'log'],
-  });
+  const app = await NestFactory.create(AppModule, { bufferLogs: true });
+
+  const logger = app.get(WINSTON_MODULE_NEST_PROVIDER);
+  app.useLogger(logger);
 
   const config = app.get(ConfigService);
   const port = config.get<number>('app.port', 3000);
@@ -80,9 +82,8 @@ async function bootstrap() {
 
   console.log(`\n🚀 API running:     http://localhost:${port}/${prefix}`);
   console.log(`📖 Swagger docs:    http://localhost:${port}/api/docs`);
-  console.log(
-    `🏥 Health check:    http://localhost:${port}/${prefix}/status\n`,
-  );
+  console.log(`🏥 Health check:    http://localhost:${port}/${prefix}/status`);
+  console.log(`📊 Metrics:         http://localhost:${port}/${prefix}/metrics\n`);
 }
 
 bootstrap();

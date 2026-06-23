@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(docker compose -f \"C:\\\\Users\\\\Det-Pc\\\\OneDrive\\\\Escritorio\\\\factfast\\\\apps\\\\api\\\\docker-compose.yml\" up -d 2>&1)",
+      "PowerShell(npm install -g pnpm@9 2>&1)",
+      "PowerShell(pnpm --version)",
+      "PowerShell(Copy-Item \"C:\\\\Users\\\\Det-Pc\\\\OneDrive\\\\Escritorio\\\\factfast\\\\apps\\\\api\\\\.env.example\" \"C:\\\\Users\\\\Det-Pc\\\\OneDrive\\\\Escritorio\\\\factfast\\\\apps\\\\api\\\\.env\")"
+    ]
+  }
+}

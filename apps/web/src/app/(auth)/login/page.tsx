@@ -7,7 +7,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useMutation } from "@tanstack/react-query";
-import { Button, TextField, Label, InputGroup, FieldError } from "@heroui/react";
+import { Button, InputGroup, toast } from "@heroui/react";
 import { api, decodificarJwt } from "../../../lib/api";
 import { useAppContext } from "../../../store/app-context.store";
 import { LogIn, Eye, EyeOff, Loader2, Mail, Lock } from "lucide-react";
@@ -36,6 +36,7 @@ export default function LoginPage() {
   });
 
   const loginMutation = useMutation({
+    meta: { skipErrorToast: true },
     mutationFn: async (data: LoginInput) => {
       const r = await api.post("/autenticacion/iniciar-sesion", { correo: data.correo, contrasena: data.contrasena });
       return r.data;
@@ -50,6 +51,18 @@ export default function LoginPage() {
         if (payload.empresa_id) setEmpresa(payload.empresa_id, payload.empresa_nombre || "", payload.empresa_ruc || "");
         setSucursal("", ""); setCaja("", ""); setSesionCaja(null); setBodega("", ""); setPuntoEmision("");
         router.push(payload.empresa_id ? "/dashboard" : "/onboarding");
+      }
+    },
+    onError: (error: unknown) => {
+      const e = error as { response?: { data?: { message?: string }; status?: number }; message?: string };
+      const status = e?.response?.status;
+      if (status === 401) {
+        toast.danger("Credenciales inválidas", { description: "Verifica tu correo y contraseña e inténtalo de nuevo.", timeout: 5000 });
+      } else if (!status) {
+        toast.danger("Sin conexión", { description: "No se pudo conectar con el servidor.", timeout: 5000 });
+      } else {
+        const descripcion = e?.response?.data?.message || e?.message || "Ocurrió un error inesperado.";
+        toast.danger("Error al iniciar sesión", { description: descripcion, timeout: 5000 });
       }
     },
   });
@@ -102,7 +115,7 @@ export default function LoginPage() {
             </h1>
             <p className="text-sm text-slate-500">
               ¿No tienes una cuenta?{" "}
-              <Link href="/registro" className="text-[var(--ff-brand)] font-semibold hover:underline no-underline">
+              <Link href="/registro" className="text-(--ff-brand) font-semibold hover:underline no-underline">
                 Regístrate gratis
               </Link>
             </p>
@@ -114,50 +127,60 @@ export default function LoginPage() {
           <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-5">
             
             {/* Correo Electrónico */}
-             <TextField isRequired isInvalid={!!errors.correo} className="flex flex-col gap-1.5">
-              <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Correo Electrónico</Label>
-              <InputGroup className="px-1 border border-slate-200 rounded-lg flex items-center bg-white h-11 focus-within:border-[var(--ff-brand)] focus-within:ring-2 focus-within:ring-[var(--ff-brand)]/20 transition-all">
-                <InputGroup.Prefix className="pl-3 pr-1.5 flex items-center justify-center shrink-0">
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="login-correo" className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                Correo Electrónico <span aria-hidden="true" className="text-red-400">*</span>
+              </label>
+              <InputGroup className={`px-1 border rounded-lg flex items-center bg-white h-11 transition-all focus-within:ring-2 focus-within:ring-(--ff-brand)/20 ${errors.correo ? "border-red-400" : "border-slate-200 focus-within:border-(--ff-brand)"}`}>
+                <InputGroup.Prefix className="pl-3 pr-1.5 flex items-center shrink-0">
                   <Mail size={16} className="text-slate-400" />
                 </InputGroup.Prefix>
-                <InputGroup.Input
+                <input
                   id="login-correo"
                   type="email"
+                  autoComplete="email"
                   placeholder="ejemplo@empresa.com"
                   className="w-full pl-1 bg-transparent border-0 focus:outline-none focus:ring-0 outline-none text-sm text-slate-800 placeholder-slate-400"
                   {...register("correo")}
                 />
               </InputGroup>
-              <FieldError className="text-xs text-red-500 mt-1">{errors.correo?.message}</FieldError>
-            </TextField>
+              {errors.correo?.message && (
+                <p className="text-xs text-red-500">{errors.correo.message}</p>
+              )}
+            </div>
 
             {/* Contraseña */}
-             <TextField isRequired isInvalid={!!errors.contrasena} className="flex flex-col gap-1.5">
-              <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Contraseña</Label>
-              <InputGroup className="px-1 border border-slate-200 rounded-lg flex items-center bg-white h-11 focus-within:border-[var(--ff-brand)] focus-within:ring-2 focus-within:ring-[var(--ff-brand)]/20 transition-all">
-                <InputGroup.Prefix className="pl-3 pr-1.5 flex items-center justify-center shrink-0">
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="login-contrasena" className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                Contraseña <span aria-hidden="true" className="text-red-400">*</span>
+              </label>
+              <InputGroup className={`px-1 border rounded-lg flex items-center bg-white h-11 transition-all focus-within:ring-2 focus-within:ring-(--ff-brand)/20 ${errors.contrasena ? "border-red-400" : "border-slate-200 focus-within:border-(--ff-brand)"}`}>
+                <InputGroup.Prefix className="pl-3 pr-1.5 flex items-center shrink-0">
                   <Lock size={16} className="text-slate-400" />
                 </InputGroup.Prefix>
-                <InputGroup.Input
+                <input
                   id="login-contrasena"
                   type={verPass ? "text" : "password"}
+                  autoComplete="current-password"
                   placeholder="••••••••"
                   className="w-full pl-1 bg-transparent border-0 focus:outline-none focus:ring-0 outline-none text-sm text-slate-800 placeholder-slate-400"
                   {...register("contrasena")}
                 />
-                <InputGroup.Suffix className="pl-1.5 pr-3 flex items-center justify-center shrink-0">
-                  <Button
+                <InputGroup.Suffix className="pl-1.5 pr-3 flex items-center shrink-0">
+                  <button
                     type="button"
-                    onPress={() => setVerPass(!verPass)}
-                    className="bg-transparent text-slate-400 p-1 flex items-center justify-center hover:bg-slate-100/50 rounded"
-                    aria-label="Mostrar/ocultar contraseña"
+                    onClick={() => setVerPass(!verPass)}
+                    className="text-slate-400 hover:text-slate-600 p-1 rounded transition-colors"
+                    aria-label={verPass ? "Ocultar contraseña" : "Mostrar contraseña"}
                   >
                     {verPass ? <EyeOff size={16} /> : <Eye size={16} />}
-                  </Button>
+                  </button>
                 </InputGroup.Suffix>
               </InputGroup>
-              <FieldError className="text-xs text-red-500 mt-1">{errors.contrasena?.message}</FieldError>
-            </TextField>
+              {errors.contrasena?.message && (
+                <p className="text-xs text-red-500">{errors.contrasena.message}</p>
+              )}
+            </div>
 
             {/* Fila Recordarme / Olvidaste Contraseña */}
             <div className="flex justify-between items-center text-xs md:text-sm">
@@ -170,7 +193,7 @@ export default function LoginPage() {
                 />
                 Recordarme
               </label>
-              <Link href="/recuperar-contrasena" className="text-[var(--ff-brand)] font-semibold hover:underline no-underline">
+              <Link href="/recuperar-contrasena" className="text-(--ff-brand) font-semibold hover:underline no-underline">
                 ¿Olvidaste tu contraseña?
               </Link>
             </div>
@@ -180,7 +203,7 @@ export default function LoginPage() {
               type="submit" 
               variant="primary"
               isDisabled={loginMutation.isPending} 
-              className="w-full h-11 bg-[var(--ff-brand)] hover:bg-[var(--ff-brand-dk)] text-white font-semibold flex items-center justify-center gap-2 rounded-lg transition-colors"
+              className="w-full h-11 bg-(--ff-brand) hover:bg-(--ff-brand-dk) text-white font-semibold flex items-center justify-center gap-2 rounded-lg transition-colors"
             >
               {loginMutation.isPending ? (
                 <><Loader2 size={15} className="animate-spin" /> Iniciando sesión...</>

@@ -12,13 +12,16 @@ import { MailModule } from '../mail/mail.module';
   imports: [
     BullModule.forRootAsync({
       imports: [ConfigModule],
-      useFactory: (config: ConfigService) => ({
-        redis: {
-          host: config.get('app.redis.host'),
-          port: config.get('app.redis.port'),
-          password: config.get('app.redis.password'),
-        },
-      }),
+      useFactory: (config: ConfigService) => {
+        const password = config.get<string>('app.redis.password');
+        return {
+          redis: {
+            host: config.get('app.redis.host'),
+            port: config.get('app.redis.port'),
+            ...(password ? { password } : {}),
+          },
+        };
+      },
       inject: [ConfigService],
     }),
     BullModule.registerQueue({ name: SRI_QUEUE }),

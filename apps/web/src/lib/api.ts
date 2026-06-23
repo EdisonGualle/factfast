@@ -1,6 +1,6 @@
 import axios from "axios";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000/v1";
 
 // Instancia principal de Axios con interceptores
 export const api = axios.create({
@@ -33,10 +33,11 @@ api.interceptors.response.use(
 
     // Refresh token automático si el JWT expiró
     if (error.response?.status === 401 && !originalRequest._retry) {
+      const refreshToken = localStorage.getItem("factfast_refresh");
+      if (!refreshToken) return Promise.reject(error);
+
       originalRequest._retry = true;
       try {
-        const refreshToken = localStorage.getItem("factfast_refresh");
-        if (!refreshToken) throw new Error("Sin refresh token");
 
         const { data } = await axios.post(`${API_URL}/autenticacion/refrescar`, {
           token_refresh: refreshToken,

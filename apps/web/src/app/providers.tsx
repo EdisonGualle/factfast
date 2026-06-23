@@ -10,7 +10,6 @@ import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { Toast, toast } from "@heroui/react";
 import { useState } from "react";
 
-/** Extrae un mensaje legible de cualquier error de API o de red. */
 function mensajeError(error: unknown): string {
   const e = error as { response?: { data?: { message?: string } }; message?: string };
   return (
@@ -20,15 +19,19 @@ function mensajeError(error: unknown): string {
   );
 }
 
-/**
- * ¿Debe mostrarse un toast global para este error?
- * - Las 401 las maneja el interceptor (redirige a /login), no se notifican.
- * - Una query/mutation puede excluirse con `meta: { skipErrorToast: true }`
- *   (útil cuando ya muestra su propio error inline).
- */
+function tituloError(error: unknown): string {
+  const status = (error as { response?: { status?: number } })?.response?.status;
+  if (status === 401) return "Credenciales inválidas";
+  if (status === 404) return "No encontrado";
+  if (status === 403) return "Sin permiso";
+  if (status === 422) return "Datos inválidos";
+  if (status === 500) return "Error del servidor";
+  if (!status) return "Sin conexión";
+  return "Error";
+}
+
 function debeNotificar(error: unknown, meta?: Record<string, unknown>): boolean {
   if (meta?.skipErrorToast) return false;
-  if ((error as { response?: { status?: number } })?.response?.status === 401) return false;
   return true;
 }
 
@@ -38,19 +41,26 @@ export function Providers({ children }: { children: React.ReactNode }) {
       new QueryClient({
         defaultOptions: {
           queries: {
-            staleTime: 60 * 1000, // 1 minuto
+            staleTime: 60 * 1000,
             retry: 1,
           },
         },
-        // Errores GENERALES de API → toast (un solo lugar para toda la app)
         queryCache: new QueryCache({
           onError: (error, query) => {
-            if (debeNotificar(error, query.meta)) toast.danger(mensajeError(error));
+            if (debeNotificar(error, query.meta))
+              toast.danger(tituloError(error), {
+                description: mensajeError(error),
+                timeout: 5000,
+              });
           },
         }),
         mutationCache: new MutationCache({
           onError: (error, _vars, _ctx, mutation) => {
-            if (debeNotificar(error, mutation.meta)) toast.danger(mensajeError(error));
+            if (debeNotificar(error, mutation.meta))
+              toast.danger(tituloError(error), {
+                description: mensajeError(error),
+                timeout: 5000,
+              });
           },
         }),
       })
@@ -58,8 +68,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      {/* Región de toasts (requerida por HeroUI v3) — montada una sola vez en el root */}
-      <Toast.Provider placement="bottom end" />
+      <Toast.Provider placement="top end" maxVisibleToasts={3} gap={8} />
       {children}
       <ReactQueryDevtools initialIsOpen={false} />
     </QueryClientProvider>

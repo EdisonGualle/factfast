@@ -1,5 +1,8 @@
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { WinstonModule } from 'nest-winston';
+import * as winston from 'winston';
+import { PrometheusModule } from '@willsoto/nestjs-prometheus';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { ScheduleModule } from '@nestjs/schedule';
 import { APP_GUARD } from '@nestjs/core';
@@ -42,6 +45,38 @@ import { TenantMiddleware } from './common/context/tenant.middleware';
       load: [appConfig],
       validate: validateConfig,
       cache: true,
+    }),
+
+    WinstonModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => {
+        const env = config.get<string>('app.env', 'development');
+        const isProd = env === 'production';
+        return {
+          transports: [
+            new winston.transports.Console({
+              format: isProd
+                ? winston.format.combine(
+                    winston.format.timestamp(),
+                    winston.format.json(),
+                  )
+                : winston.format.combine(
+                    winston.format.colorize(),
+                    winston.format.timestamp({ format: 'HH:mm:ss' }),
+                    winston.format.printf(({ timestamp, level, message, context }) =>
+                      `${timestamp} [${context ?? 'App'}] ${level}: ${message}`,
+                    ),
+                  ),
+            }),
+          ],
+        };
+      },
+    }),
+
+    PrometheusModule.register({
+      path: '/metrics',
+      defaultMetrics: { enabled: true },
     }),
 
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 100 }]),
